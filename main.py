@@ -167,7 +167,7 @@ async def on_message(message):
         activated_channel_id = message.channel.id
         await message.channel.send(
             embed=discord.Embed(
-                title="『𝒯𝒲𝐼𝒩𝒮 𝒮𝒯𝒪𝑅𝐸 𝒜𝒞𝒞𝒪𝒰𝒩𝒯 𝒪𝑅𝒟𝐸𝑅』",
+                title="『𝚃𝚆𝙸𝙽𝚂 𝚂𝚃𝙾𝚁𝙴 𝙰𝙲𝙲𝙾𝚄𝙽𝚃 𝙾𝚁𝙳𝙴𝚁』",
                 description="Use the button below to create a new account order panel.",
                 color=discord.Color.purple()
             ),
