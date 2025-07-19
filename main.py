@@ -16,7 +16,7 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 OWNER_ID = 1268648957391671458
-REQUIRED_ROLES = ["🛒︱𝖬𝖺𝗋𝗄𝖾𝗍", "🛒︱𝖳𝗋𝗎𝗌𝗍𝖾𝖽-𝖲𝖾𝗅𝗅𝖾𝗋"]
+TRUSTED_ROLE_ID = 1368606082674724916
 activated_channel_id = None
 user_states = {}
 
@@ -34,6 +34,9 @@ GAMES = [
     ("Roblox", "https://upload.wikimedia.org/wikipedia/commons/7/73/Roblox_Logo_2025.svg")
 ]
 
+def has_trusted_role(member):
+    return discord.utils.get(member.roles, id=TRUSTED_ROLE_ID) is not None
+
 class RequestView(View):
     def __init__(self, user=None):
         super().__init__(timeout=None)
@@ -46,12 +49,10 @@ class RequestView(View):
 class GameSelect(Select):
     def __init__(self, panel):
         self.panel = panel
-        super().__init__(
-            placeholder="🎮 Choose a game",
-            min_values=1,
-            max_values=1,
-            options=[discord.SelectOption(label=name, value=name) for name, _ in GAMES]
-        )
+        options = [
+            discord.SelectOption(label=name, value=name, description=f"Buy {name}", emoji="🎮") for name, logo in GAMES
+        ]
+        super().__init__(placeholder="🎮 Choose a game", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction):
         if interaction.user != self.panel.user:
@@ -63,24 +64,19 @@ class GameSelect(Select):
 class QuantitySelect(Select):
     def __init__(self, panel):
         self.panel = panel
-        super().__init__(
-            placeholder="🔹 Select quantity",
-            min_values=1,
-            max_values=1,
-            options=[discord.SelectOption(label=str(i), value=str(i)) for i in range(1, 21)]
-        )
+        options = [discord.SelectOption(label=str(i), value=str(i)) for i in range(1, 21)]  # من 1 إلى 20
+        super().__init__(placeholder="🔹 Select quantity", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction):
         if interaction.user != self.panel.user:
             await interaction.response.send_message("❌ This is not your request panel.", ephemeral=True)
             return
 
-        self.panel.selected_amount = self.values[0]
-        user_roles = [r.name for r in interaction.user.roles]
-        if not any(role in REQUIRED_ROLES for role in user_roles):
-            await interaction.response.send_message("❌ You need one of the following roles to continue: " + ", ".join(REQUIRED_ROLES), ephemeral=True)
+        if not has_trusted_role(interaction.user):
+            await interaction.response.send_message("❌ Only members with the trusted role can use this.", ephemeral=True)
             return
 
+        self.panel.selected_amount = self.values[0]
         user_states[interaction.user.id] = {
             "step": "price",
             "game": self.panel.selected_game,
@@ -118,14 +114,13 @@ class PostControl(View):
 
     @discord.ui.button(label="🎮 Create Order", style=discord.ButtonStyle.primary)
     async def create_order_panel(self, interaction: discord.Interaction, button: Button):
-        user_roles = [r.name for r in interaction.user.roles]
-        if not any(role in REQUIRED_ROLES for role in user_roles):
-            await interaction.response.send_message("❌ You need one of the required roles to use this.", ephemeral=True)
+        if not has_trusted_role(interaction.user):
+            await interaction.response.send_message("❌ Only members with the trusted role can use this.", ephemeral=True)
             return
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="🆕 New Account Request",
-                description="Please use the menu below to choose a game and quantity to request a new account.",
+                description="Please use the menu below to choose a game and quantity.",
                 color=discord.Color.green()
             ),
             view=RequestView(user=interaction.user),
@@ -138,14 +133,13 @@ class PanelStarter(View):
 
     @discord.ui.button(label="🎮 Create Order", style=discord.ButtonStyle.primary)
     async def create_order(self, interaction: discord.Interaction, button: Button):
-        user_roles = [r.name for r in interaction.user.roles]
-        if not any(role in REQUIRED_ROLES for role in user_roles):
-            await interaction.response.send_message("❌ You need one of the required roles to use this.", ephemeral=True)
+        if not has_trusted_role(interaction.user):
+            await interaction.response.send_message("❌ Only members with the trusted role can use this.", ephemeral=True)
             return
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="🆕 New Account Request",
-                description="Please use the menu below to choose a game and quantity to request a new account.",
+                description="Please use the menu below to choose a game and quantity.",
                 color=discord.Color.green()
             ),
             view=RequestView(user=interaction.user),
@@ -178,7 +172,7 @@ async def on_message(message):
     if message.channel.id != activated_channel_id:
         return
 
-    if not any(r.name in REQUIRED_ROLES for r in message.author.roles):
+    if not has_trusted_role(message.author):
         await message.delete()
         return
 
@@ -188,11 +182,8 @@ async def on_message(message):
         user_states[message.author.id]["price"] = message.content
         user_states[message.author.id]["step"] = "details"
         await message.delete()
-        embed = discord.Embed(
-            description="📝 Please enter the details of your request.",
-            color=discord.Color.orange()
-        )
-        msg = await message.channel.send(embed=embed, delete_after=15)
+        embed = discord.Embed(description="📝 Please enter the details of your request.", color=discord.Color.orange())
+        await message.channel.send(embed=embed, delete_after=15)
         return
 
     if state and state["step"] == "details":
@@ -207,11 +198,11 @@ async def on_message(message):
             description=f"**Game:** {game}\n**Amount:** {amount} account{'s' if amount != '1' else ''}\n**Price:** {price} EGP\n**Details:** {details}",
             color=discord.Color.blurple()
         )
-        await state["channel"].send("@everyone", embed=embed, view=view)
+        await state["channel"].send("||@everyone||", embed=embed, view=view)
         del user_states[message.author.id]
         return
 
     if not state:
         await message.delete()
-        return 
+
 bot.run(os.getenv("TOKEN"))
